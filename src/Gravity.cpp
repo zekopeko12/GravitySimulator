@@ -143,7 +143,7 @@ void ResolveCollision(int ball1, int ball2)
     if(ball1 < 0 || ball2 < 0 || ball1 >= (int)gBalls.size() || ball2 >= (int)gBalls.size() || ball1 == ball2)  return;
 
     float squaredRadius = powf(RadiusFromMass(gBalls[ball1].mass) + RadiusFromMass(gBalls[ball2].mass), 2);
-    float distance = powf(sqrtf(powf(gBalls[ball1].pos[0] - gBalls[ball2].pos[0], 2) + powf(gBalls[ball1].pos[1] - gBalls[ball2].pos[1], 2) + powf(gBalls[ball2].pos[2] - gBalls[ball2].pos[2], 2)), 2);
+    float distance = powf(sqrtf(powf(gBalls[ball1].pos[0] - gBalls[ball2].pos[0], 2) + powf(gBalls[ball1].pos[1] - gBalls[ball2].pos[1], 2) + powf(gBalls[ball1].pos[2] - gBalls[ball2].pos[2], 2)), 2);
 
     if(distance < squaredRadius){
         float newMass = gBalls[ball1].mass + gBalls[ball2].mass;
