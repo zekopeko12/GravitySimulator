@@ -6,7 +6,7 @@
 #include "imgui_impl_glut.h"
 #include "imgui_impl_opengl3.h"
 
-void RenderMenus(int height, int width, vector<BallInstance>& gBalls, int& gSelected)
+void RenderMenus(int height, int width, vector<BallInstance>& gBalls, int& gSelected, vector<BallInstance>& gAsteroids)
 {
     static bool showPlanetCreator = false;
 
@@ -26,6 +26,7 @@ void RenderMenus(int height, int width, vector<BallInstance>& gBalls, int& gSele
     if(ImGui::Button("Reset")){
         gSelected = -1;
         gBalls.clear();
+        gAsteroids.clear();
         gTrails.clear();
     }
 
@@ -52,7 +53,7 @@ void RenderMenus(int height, int width, vector<BallInstance>& gBalls, int& gSele
         ImGui::ColorEdit3("Color", gBalls[gSelected].color);
         ImGui::DragFloat3("Position", gBalls[gSelected].pos, 0.05f);
         ImGui::DragFloat3("Velocity", gBalls[gSelected].vel, 0.05f);
-        ImGui::SliderFloat("Mass", &gBalls[gSelected].mass, 0.0f, 1000.0f);
+        ImGui::DragFloat("Mass", &gBalls[gSelected].mass, 0.05f);
 
         if(ImGui::Button("Follow selected")) gFollowing = true;
         ImGui::SameLine();

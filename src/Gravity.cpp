@@ -1,62 +1,132 @@
 #include "Gravity.h"
 #include "Ball.h"
 #include "CBFunctions.h"
+#include "Trails.h"
 
-void StepGravity(float dt)
+static float gMoonAngle = 45.0f * PI / 180.0f;
+
+void StepGravity(float dt, float maxStep)
 {
-    const int n = (int)gBalls.size();
-    const float maxStep = 0.002f;
     int substeps = (int)ceilf(dt / maxStep);
     if(substeps < 1) substeps = 1;
 
     const float h = dt / substeps;
-    const float softening = 0.01f;
+    const float half_h = 0.5f * h;
+    const float h2_half = 0.5f * h * h;
+    const float softening = 0.0000001f;
 
-    vector<float> acc(n * 3);
+    static vector<BallInstance*> bodies;
+    static vector<float> acc, acc_new;
+
+    bodies.clear();
+    for(auto& ball : gBalls)    bodies.push_back(&ball);
+    const int nm = (int)bodies.size();
+    for(auto& asteroid : gAsteroids)    bodies.push_back(&asteroid);
+
+    const int n = (int)bodies.size();
+    acc.assign(n * 3, 0.0f);
+    acc_new.assign(n * 3, 0.0f);
+
+    auto computeAccelerations = [&](vector<float>& target_acc){
+        fill(target_acc.begin(), target_acc.end(), 0.0f);
+
+        for(int i = 0; i < nm; i++){
+            if(bodies[i]->dead) continue;
+            for(int j = i + 1; j < n; j++){
+                if(bodies[j]->dead) continue;
+
+                BallInstance& a = *bodies[i];
+                BallInstance& b = *bodies[j];
+
+                const float dx = b.pos[0] - a.pos[0];
+                const float dy = b.pos[1] - a.pos[1];
+                const float dz = b.pos[2] - a.pos[2];
+
+                const float d2 = dx * dx + dy * dy + dz * dz + softening;
+                const float inv3 = 1.0f / (d2 * sqrtf(d2));
+
+                const float kA = GravitationalConstant * b.mass * inv3;
+                const float kB = GravitationalConstant * a.mass * inv3;
+
+                target_acc[i * 3 + 0] += kA * dx;
+                target_acc[i * 3 + 1] += kA * dy;
+                target_acc[i * 3 + 2] += kA * dz;
+
+                target_acc[j * 3 + 0] -= kB * dx;
+                target_acc[j * 3 + 1] -= kB * dy;
+                target_acc[j * 3 + 2] -= kB * dz;
+            }
+        }
+    };
+
+    computeAccelerations(acc);
 
     for(int s = 0; s < substeps; s++){
-        fill(acc.begin(), acc.end(), 0.0f);
-
         for(int i = 0; i < n; i++){
-            for(int j = 0; j < n; j++){
-                if(i == j) continue;
+            BallInstance& b = *bodies[i];
+            if(b.dead)  continue;
 
-                const float dx = gBalls[j].pos[0] - gBalls[i].pos[0];
-                const float dy = gBalls[j].pos[1] - gBalls[i].pos[1];
-                const float dz = gBalls[j].pos[2] - gBalls[i].pos[2];
-
-                const float d2   = dx * dx + dy * dy + dz * dz + softening;
-                const float inv3 = 1.0f / (d2 * sqrtf(d2));
-                const float k    = GravitationalConstant * gBalls[j].mass * inv3;
-
-                acc[i * 3 + 0] += k * dx;
-                acc[i * 3 + 1] += k * dy;
-                acc[i * 3 + 2] += k * dz;
-            }
-        }
-
-        for(int i = 0; i < n; i++){
             for(int c = 0; c < 3; c++){
-                gBalls[i].vel[c] += acc[i * 3 + c] * h;
-                gBalls[i].pos[c] += gBalls[i].vel[c] * h;
+                float a_val = acc[i * 3 + c];
+                b.pos[c] += b.vel[c] * h + a_val * h2_half;
+                b.vel[c] += a_val * half_h;
             }
         }
 
+        computeAccelerations(acc_new);
+
         for(int i = 0; i < n; i++){
+            BallInstance& b = *bodies[i];
+            if(b.dead)  continue;
+
+            for(int c = 0; c < 3; c++){
+                b.vel[c] += acc_new[i * 3 + c] * half_h;
+            }
+        }
+
+        bool merged = false;
+        for(int i = 0; i < (int)gBalls.size(); i++){
             if(gBalls[i].dead)  continue;
 
-            for(int j = i + 1; j < n; j++){
+            for(int j = i + 1; j < (int)gBalls.size(); j++){
                 if(gBalls[j].dead)  continue;
 
                 ResolveCollision(i, j);
+
+                if(gBalls[i].dead || gBalls[j].dead)    merged = true;
+                if(gBalls[i].dead)  break;
             }
         }
+
+        if(gBalls.size() > 3 && !gBalls[3].dead && gMoonInitialized)
+        {
+            BallInstance& earth = gBalls[3];
+
+            const float moonDistance = 0.6f;
+            const float moonSpeed = 2.0f;
+
+            gMoonAngle += moonSpeed * h;
+
+            gMoon.pos[0] = earth.pos[0] + moonDistance * cosf(gMoonAngle);
+            gMoon.pos[1] = earth.pos[1];
+            gMoon.pos[2] = earth.pos[2] + moonDistance * sinf(gMoonAngle);
+
+            gMoon.vel[0] = earth.vel[0];
+            gMoon.vel[1] = earth.vel[1];
+            gMoon.vel[2] = earth.vel[2];
+        }
+
+        RecordTrails(h);
+
+        if(merged)  computeAccelerations(acc);
+        else        acc.swap(acc_new);
     }
 }
 
 void SolarSystemDemo()
 {
     gBalls.clear();
+    gAsteroids.clear();
     gTrails.clear();
 
     const float center[3] = { 0.0f, 0.0f, 0.8f };
@@ -86,6 +156,8 @@ void SolarSystemDemo()
     float px = 0.0f, pz = 0.0f;
 
     for(int i = 0; i < 8; i++){
+        if(i == 4)  AsteroidPlaneSetup(sun, px, pz);
+
         BallInstance b;
         const float r = au[i] * kAUScale;
         const float a = angles[i];
@@ -101,10 +173,33 @@ void SolarSystemDemo()
 
         b.mass = masses[i] * kPlanetMassScale;
         b.color[0] = colors[i][0]; b.color[1] = colors[i][1]; b.color[2] = colors[i][2];
+        b.collisionRadius = (i==2) ? 0.008f : RadiusFromMass(b.mass);
 
         px += b.mass * b.vel[0];
         pz += b.mass * b.vel[2];
         gBalls.push_back(b);
+
+        if(i == 2){
+            BallInstance& earth = gBalls.back();
+
+            const float moonDistance = 0.6f;
+            const float moonMass = 0.0123f * kPlanetMassScale;
+
+            gMoon.pos[0] = earth.pos[0] + moonDistance * cosf(gMoonAngle);
+            gMoon.pos[1] = earth.pos[1];
+            gMoon.pos[2] = earth.pos[2] + moonDistance * sinf(gMoonAngle);
+
+            const float moonSpeed = sqrtf(GravitationalConstant * earth.mass / moonDistance);
+            gMoon.vel[0] = earth.vel[0] - moonSpeed * sinf(gMoonAngle);
+            gMoon.vel[1] = earth.vel[1];
+            gMoon.vel[2] = earth.vel[2] + moonSpeed * cosf(gMoonAngle);
+
+            gMoon.mass = moonMass;
+            gMoon.dead = false;
+            gMoon.color[0] = 0.72f; gMoon.color[1] = 0.72f; gMoon.color[2] = 0.76f;
+            gMoon.collisionRadius = 0.002f;
+            gMoonInitialized = true;
+        }
     }
 
     gBalls[0].vel[0] = -px / gBalls[0].mass;
@@ -125,7 +220,7 @@ float RadiusFromMass(float mass)
 {
     const float k           = 0.6f;
     const float exponent    = 0.2f;
-    const float minRadius   = 0.15f;
+    const float minRadius   = 0.0000001f;
     const float maxRadius   = 2.2f;
 
     if(mass < 0.0f) mass = 0.0f;
@@ -142,38 +237,115 @@ void ResolveCollision(int ball1, int ball2)
 {
     if(ball1 < 0 || ball2 < 0 || ball1 >= (int)gBalls.size() || ball2 >= (int)gBalls.size() || ball1 == ball2)  return;
 
-    float squaredRadius = powf(RadiusFromMass(gBalls[ball1].mass) + RadiusFromMass(gBalls[ball2].mass), 2);
-    float distance = powf(sqrtf(powf(gBalls[ball1].pos[0] - gBalls[ball2].pos[0], 2) + powf(gBalls[ball1].pos[1] - gBalls[ball2].pos[1], 2) + powf(gBalls[ball1].pos[2] - gBalls[ball2].pos[2], 2)), 2);
+    BallInstance& a = gBalls[ball1];
+    BallInstance& b = gBalls[ball2];
 
-    if(distance < squaredRadius){
-        float newMass = gBalls[ball1].mass + gBalls[ball2].mass;
-        if(newMass <= 0.0f) return;
+    float dx = b.pos[0] - a.pos[0];
+    float dy = b.pos[1] - a.pos[1];
+    float dz = b.pos[2] - a.pos[2];
 
-        float newVelocity[3];
-        float newPosition[3];
+    float distanceSquared = dx * dx + dy * dy + dz * dz;
+    float radiusA = (a.collisionRadius > 0.0f) ? a.collisionRadius : RadiusFromMass(a.mass);
+    float radiusB = (b.collisionRadius > 0.0f) ? b.collisionRadius : RadiusFromMass(b.mass);
+    float radiusSum = radiusA + radiusB;
 
-        for(int i = 0; i < 3; i++){
-            newVelocity[i] = (gBalls[ball1].mass * gBalls[ball1].vel[i] + gBalls[ball2].mass * gBalls[ball2].vel[i]) / newMass;
-            newPosition[i] = (gBalls[ball1].mass * gBalls[ball1].pos[i] + gBalls[ball2].mass * gBalls[ball2].pos[i]) / newMass;
-        }
+    if(distanceSquared >= radiusSum * radiusSum)    return;
 
-        if(gBalls[ball1].mass > gBalls[ball2].mass){
-            gBalls[ball1].mass = newMass;
+    float totalMass = a.mass + b.mass;
+    if(totalMass <= 0.0f)   return;
 
-            for(int i = 0; i < 3; i++){
-                gBalls[ball1].vel[i] = newVelocity[i];
-                gBalls[ball1].pos[i] = newPosition[i];
-            }
-            gBalls[ball2].dead = true;
+    float newVelocity[3];
+    float newPosition[3];
 
-        } else{
-            gBalls[ball2].mass = newMass;
+    for(int c = 0; c < 3; c++){
+        newVelocity[c] = (a.mass * a.vel[c] + b.mass * b.vel[c]) / totalMass;
+        newPosition[c] = (a.mass * a.pos[c] + b.mass * b.pos[c]) / totalMass;
+    }
 
-            for(int i = 0; i < 3; i++){
-                gBalls[ball2].vel[i] = newVelocity[i];
-                gBalls[ball2].pos[i] = newPosition[i];
-            }
-            gBalls[ball1].dead = true;
-        }
+    int survivor = (a.mass >= b.mass) ? ball1 : ball2;
+    int removed = (survivor == ball1) ? ball2 : ball1;
+
+    gBalls[survivor].mass = totalMass;
+
+    for(int c = 0; c < 3; c++){
+        gBalls[survivor].vel[c] = newVelocity[c];
+        gBalls[survivor].pos[c] = newPosition[c];
+    }
+
+    gBalls[removed].dead = true;
+}
+
+void AsteroidPlaneSetup(BallInstance sun, float& px, float& pz)
+{
+    const float center[3] = { 0.0f, 0.0f, 0.8f };
+
+    for(int i = 0; i < 2000; i++){
+        BallInstance a;
+        float randomDistance = 16.0f + (28.0f - 16.0f) * ((float)rand() / RAND_MAX);
+        float randomMass = 0.001f + (0.01 - 0.001) * ((float)rand() / RAND_MAX);
+        float randomAngle = ((float)rand() / RAND_MAX) * 6.2831853f;
+        const float v = sqrtf(GravitationalConstant * sun.mass / randomDistance);
+
+        a.pos[0] = center[0] + randomDistance * cosf(randomAngle);
+        a.pos[1] = center[1];
+        a.pos[2] = center[2] + randomDistance * sinf(randomAngle);
+
+        a.vel[0] = -v * sinf(randomAngle);
+        a.vel[1] = 0.0f;
+        a.vel[2] = v * cosf(randomAngle);
+
+        a.mass = randomMass * kPlanetMassScale;
+        a.color[0] = 0.47f; a.color[1] = 0.47f; a.color[2] = 0.47f;
+
+        px += a.mass * a.vel[0];
+        pz += a.mass * a.vel[2];
+        gAsteroids.push_back(a);
+    }
+
+    // Adding some outliers under and over the min/max distance for a more realistic look
+    for(int i = 0; i < 50; i++){
+        BallInstance a;
+        float randomDistance = 14.0f + (16.0f - 14.0f) * ((float)rand() / RAND_MAX);
+        float randomMass = 0.001f + (0.01 - 0.001) * ((float)rand() / RAND_MAX);
+        float randomAngle = ((float)rand() / RAND_MAX) * 6.2831853f;
+        const float v = sqrtf(GravitationalConstant * sun.mass / randomDistance);
+
+        a.pos[0] = center[0] + randomDistance * cosf(randomAngle);
+        a.pos[1] = center[1];
+        a.pos[2] = center[2] + randomDistance * sinf(randomAngle);
+
+        a.vel[0] = -v * sinf(randomAngle);
+        a.vel[1] = 0.0f;
+        a.vel[2] = v * cosf(randomAngle);
+
+        a.mass = randomMass * kPlanetMassScale;
+        a.color[0] = 0.47f; a.color[1] = 0.47f; a.color[2] = 0.47f;
+
+        px += a.mass * a.vel[0];
+        pz += a.mass * a.vel[2];
+        gAsteroids.push_back(a);
+    }
+
+    for(int i = 0; i < 200; i++){
+        BallInstance a;
+        float randomDistance = 28.0f + (38.0f - 28.0f) * ((float)rand() / RAND_MAX);
+        float randomMass = 0.001f + (0.01 - 0.001) * ((float)rand() / RAND_MAX);
+        float randomAngle = ((float)rand() / RAND_MAX) * 6.2831853f;
+        const float v = sqrtf(GravitationalConstant * sun.mass / randomDistance);
+
+        a.pos[0] = center[0] + randomDistance * cosf(randomAngle);
+        a.pos[1] = center[1];
+        a.pos[2] = center[2] + randomDistance * sinf(randomAngle);
+
+        a.vel[0] = -v * sinf(randomAngle);
+        a.vel[1] = 0.0f;
+        a.vel[2] = v * cosf(randomAngle);
+
+        a.mass = randomMass * kPlanetMassScale;
+        a.color[0] = 0.47f; a.color[1] = 0.47f; a.color[2] = 0.47f;
+
+        px += a.mass * a.vel[0];
+        pz += a.mass * a.vel[2];
+        gAsteroids.push_back(a);
     }
 }

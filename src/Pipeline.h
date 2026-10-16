@@ -7,6 +7,8 @@
 #include <GL/freeglut.h>
 #include "ogldev_math_3d.h"
 
+extern float gCurrentFOV;
+
 const int WINDOW_WIDTH  = 1024;
 const int WINDOW_HEIGHT = 768;
 
@@ -53,6 +55,16 @@ public:
         m_camera.Pos    = Vector3f(0.0f, 0.0f, 0.0f);
         m_camera.Target = Vector3f(0.0f, 0.0f, 1.0f);
         m_camera.Up     = Vector3f(0.0f, 1.0f, 0.0f);
+    }
+
+    void SetFOV(float FOV)
+    {
+        m_persProj.FOV = FOV;
+    }
+
+    float GetFOV() const
+    {
+        return m_persProj.FOV;
     }
 
     void Scale(float ScaleX, float ScaleY, float ScaleZ)

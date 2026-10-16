@@ -10,6 +10,8 @@ extern int gSelected;
 extern vector<BallInstance> gBalls;
 extern const float kBallScale;
 extern const float kSelectedBallScale;
+extern float gCurrentFOV;
+extern bool gFollowing;
 
 void SpecialKeyboardCB(int Key, int x, int y);
 void KeyboardCB(unsigned char Key, int x, int y);

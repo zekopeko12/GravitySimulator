@@ -8,11 +8,14 @@
 
 void SpecialKeyboardCB(int Key, int x, int y)
 {
-    printf("special key %d, pCamera=%p\n", Key, (void*)pGameCamera);
     ImGui_ImplGLUT_SpecialFunc(Key, x, y);
     if(ImGui::GetIO().WantTextInput)  return;
 
-    if (pGameCamera)    pGameCamera->OnKeyboard(Key);
+    gFollowing = false;
+    if (pGameCamera){
+        pGameCamera->StopFollowing();
+        pGameCamera->OnKeyboard(Key);
+    }
 }
 
 void KeyboardUpCB(unsigned char Key, int x, int y)
@@ -33,6 +36,8 @@ void KeyboardCB(unsigned char Key, int x, int y)
     if(Key == 'q' || Key == 27) { // Exit on 'q' or ESC
         exit(0);
     }
+    gFollowing = false;
+    if(pGameCamera) pGameCamera->StopFollowing();
 }
 
 int PickBall(int x, int y)
@@ -45,7 +50,7 @@ int PickBall(int x, int y)
     const float ndcX = 2.0f * x / w - 1.0f;
     const float ndcY = 1.0f - 2.0f * y / h;
 
-    const float tanHalfFOV = tanf(ToRad(30.0f / 2.0f));
+    const float tanHalfFOV = tanf(ToRad(gCurrentFOV / 2.0f));
     const float aspect = w / h;
 
     Vector3f N = pGameCamera->GetTarget(); N.Normalize();
@@ -122,6 +127,8 @@ void MouseMotionCB(int x, int y)
     ImGui::GetIO().MousePos = ImVec2(static_cast<float>(x), static_cast<float>(y));
 
     if(gLookMode && pGameCamera){
+        gFollowing = false;
+        pGameCamera->StopFollowing();
         pGameCamera->OnMouse(x, y);
     }
 }
@@ -130,7 +137,10 @@ void MouseWheelCB(int wheel, int direction, int x, int y)
 {
     if(ImGui::GetIO().WantCaptureMouse) return;
 
-    if(pGameCamera) pGameCamera->Zoom(direction * 2.0f);
+    gCurrentFOV -= direction * 2.0f;
+
+    if(gCurrentFOV < 5.0f)      gCurrentFOV = 5.0f;
+    if(gCurrentFOV > 100.0f)    gCurrentFOV = 100.0f;
 }
 
 void PassiveMouseCB(int x, int y)

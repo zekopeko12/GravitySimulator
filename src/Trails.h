@@ -15,6 +15,7 @@ extern const float GravitationalConstant;
 extern Camera* pGameCamera;
 extern GLint gWVPLocation;
 extern GLint gColorLocation;
+extern float gCurrentFOV;
 
 void InitTrails();
 void RecordTrails(float dt);

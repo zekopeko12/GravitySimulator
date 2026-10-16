@@ -11,9 +11,10 @@ struct BallInstance
 {
     float pos[3];
     float color[3];
-    float vel[3]    = { 0.0f, 0.0f, 0.0f };
-    float mass      = 1.0f;
-    bool dead     = false;
+    float vel[3]            = { 0.0f, 0.0f, 0.0f };
+    float mass              = 1.0f;
+    bool dead               = false;
+    float collisionRadius   = 0.0f;
 };
 
 class Ball
@@ -51,7 +52,6 @@ class Ball
 
           for(int i = 0; i <= m_stacks; i++){
               float phi = PI * (float)i / (float)m_stacks;
-
               for(int j = 0; j <= m_slices; j++){
                   float theta = 2.0f * PI * (float)j / (float)m_slices;
                   float x = m_radius * sinf(phi) * cosf(theta);

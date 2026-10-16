@@ -35,6 +35,7 @@ public:
         m_stepSize     = 0.5f;
 
         m_pos = Pos;
+        m_targetPos = m_pos;
 
         m_target = Target;
         m_target.Normalize();
@@ -54,6 +55,11 @@ public:
         m_mouseX = x;
         m_mouseY = y;
         m_OnLeftEdge = m_OnRightEdge = m_OnUpperEdge = m_OnLowerEdge = false;
+    }
+
+    void StopFollowing()
+    {
+        m_targetPos = m_pos;
     }
 
     bool OnKeyboard(int Key)
@@ -147,13 +153,6 @@ public:
         Update();
     }
 
-    void Zoom(float amount)
-    {
-        m_pos.x += m_target.x * amount;
-        m_pos.y += m_target.y * amount;
-        m_pos.z += m_target.z * amount;
-    }
-
     void OnRender()
     {
         bool ShouldUpdate = false;
@@ -185,11 +184,18 @@ public:
         }
     }
 
-    void Translate(float dx, float dy, float dz)
+    void SetTargetPosition(const Vector3f& pos)
     {
-        m_pos.x += dx;
-        m_pos.y += dy;
-        m_pos.z += dz;
+        m_targetPos = pos;
+    }
+
+    void UpdateSmoothMovement(float dt)
+    {
+        float smoothFactor = 8.0f * dt;
+
+        m_pos.x += (m_targetPos.x - m_pos.x) * smoothFactor;
+        m_pos.y += (m_targetPos.y - m_pos.y) * smoothFactor;
+        m_pos.z += (m_targetPos.z - m_pos.z) * smoothFactor;
     }
 
     void LookAt(const Vector3f& Point)
@@ -272,6 +278,7 @@ private:
 
     Vector3f m_pos;
     Vector3f m_target;   // normalized viewing DIRECTION
+    Vector3f m_targetPos;
     Vector3f m_up;
     float    m_stepSize;
 
