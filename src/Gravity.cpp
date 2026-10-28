@@ -15,28 +15,22 @@ void StepGravity(float dt, float maxStep)
     const float h2_half = 0.5f * h * h;
     const float softening = 0.0000001f;
 
-    static vector<BallInstance*> bodies;
     static vector<float> acc, acc_new;
 
-    bodies.clear();
-    for(auto& ball : gBalls)    bodies.push_back(&ball);
-    const int nm = (int)bodies.size();
-    for(auto& asteroid : gAsteroids)    bodies.push_back(&asteroid);
-
-    const int n = (int)bodies.size();
+    int n = (int)gBalls.size();
     acc.assign(n * 3, 0.0f);
     acc_new.assign(n * 3, 0.0f);
 
     auto computeAccelerations = [&](vector<float>& target_acc){
         fill(target_acc.begin(), target_acc.end(), 0.0f);
 
-        for(int i = 0; i < nm; i++){
-            if(bodies[i]->dead) continue;
+        for(int i = 0; i < n; i++){
+            if(gBalls[i].dead) continue;
             for(int j = i + 1; j < n; j++){
-                if(bodies[j]->dead) continue;
+                if(gBalls[j].dead) continue;
 
-                BallInstance& a = *bodies[i];
-                BallInstance& b = *bodies[j];
+                BallInstance& a = gBalls[i];
+                BallInstance& b = gBalls[j];
 
                 const float dx = b.pos[0] - a.pos[0];
                 const float dy = b.pos[1] - a.pos[1];
@@ -63,7 +57,7 @@ void StepGravity(float dt, float maxStep)
 
     for(int s = 0; s < substeps; s++){
         for(int i = 0; i < n; i++){
-            BallInstance& b = *bodies[i];
+            BallInstance& b = gBalls[i];
             if(b.dead)  continue;
 
             for(int c = 0; c < 3; c++){
@@ -76,11 +70,34 @@ void StepGravity(float dt, float maxStep)
         computeAccelerations(acc_new);
 
         for(int i = 0; i < n; i++){
-            BallInstance& b = *bodies[i];
+            BallInstance& b = gBalls[i];
             if(b.dead)  continue;
 
             for(int c = 0; c < 3; c++){
                 b.vel[c] += acc_new[i * 3 + c] * half_h;
+            }
+        }
+
+        if(!gAsteroids.empty() && !gBalls.empty() && !gBalls[0].dead) {
+            BallInstance& sun = gBalls[0];
+
+            for(auto& ast : gAsteroids){
+                const float dx = sun.pos[0] - ast.pos[0];
+                const float dy = sun.pos[1] - ast.pos[1];
+                const float dz = sun.pos[2] - ast.pos[2];
+
+                const float d2 = dx * dx + dy * dy + dz * dz + softening;
+                const float inv3 = 1.0f / (d2 * sqrtf(d2));
+
+                const float k = GravitationalConstant * sun.mass * inv3;
+
+                ast.vel[0] += k * dx * h;
+                ast.vel[1] += k * dy * h;
+                ast.vel[2] += k * dz * h;
+
+                ast.pos[0] += ast.vel[0] * h;
+                ast.pos[1] += ast.vel[1] * h;
+                ast.pos[2] += ast.vel[2] * h;
             }
         }
 
@@ -118,8 +135,10 @@ void StepGravity(float dt, float maxStep)
 
         RecordTrails(h);
 
-        if(merged)  computeAccelerations(acc);
-        else        acc.swap(acc_new);
+        if(merged){
+            n = (int)gBalls.size();
+            computeAccelerations(acc);
+        } else        acc.swap(acc_new);
     }
 }
 

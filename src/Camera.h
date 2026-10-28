@@ -4,7 +4,10 @@
 
 #include <GL/glew.h>
 #include <GL/freeglut.h>
+#include "GL/freeglut_std.h"
 #include "ogldev_math_3d.h"
+
+extern bool ignoreNextWarp;
 
 inline float RadToDeg(float rad) { return rad * 180.0f / 3.14159265358979f; }
 
@@ -54,7 +57,8 @@ public:
     {
         m_mouseX = x;
         m_mouseY = y;
-        m_OnLeftEdge = m_OnRightEdge = m_OnUpperEdge = m_OnLowerEdge = false;
+        m_pendingDX = 0;
+        m_pendingDY = 0;
     }
 
     void StopFollowing()
@@ -62,131 +66,100 @@ public:
         m_targetPos = m_pos;
     }
 
-    bool OnKeyboard(int Key)
+    void SetKey(int Key, bool down)
     {
-        bool Ret = false;
-        Vector3f Left = m_target.Cross(m_up);
-        Left.Normalize();
-        Vector3f Right = m_up.Cross(m_target);
-        Right.Normalize();
+        switch(Key){
+            case 'w':
+                m_keyUp = down;
+                break;
 
-        switch (Key) {
+            case 'W':
+                m_keyUp = down;
+                break;
 
-        case GLUT_KEY_UP:
-            m_pos.x += m_target.x * m_stepSize;
-            m_pos.y += m_target.y * m_stepSize;
-            m_pos.z += m_target.z * m_stepSize;
-            Ret = true;
-            break;
+            case 's':
+                m_keyDown = down;
+                break;
 
-        case GLUT_KEY_DOWN:
-            m_pos.x -= m_target.x * m_stepSize;
-            m_pos.y -= m_target.y * m_stepSize;
-            m_pos.z -= m_target.z * m_stepSize;
-            Ret = true;
-            break;
+            case 'S':
+                m_keyDown = down;
+                break;
 
-        case GLUT_KEY_LEFT:
-        {
-            m_pos.x += Left.x * m_stepSize;
-            m_pos.y += Left.y * m_stepSize;
-            m_pos.z += Left.z * m_stepSize;
-            Ret = true;
+            case 'a':
+                m_keyLeft = down;
+                break;
+
+            case 'A':
+                m_keyLeft = down;
+                break;
+
+            case 'd':
+                m_keyRight = down;
+                break;
+
+            case 'D':
+                m_keyRight = down;
+                break;
+
         }
-        break;
-
-        case GLUT_KEY_RIGHT:
-        {
-            m_pos.x += Right.x * m_stepSize;
-            m_pos.y += Right.y * m_stepSize;
-            m_pos.z += Right.z * m_stepSize;
-            Ret = true;
-        }
-        break;
-        }
-
-        return Ret;
     }
 
     void OnMouse(int x, int y)
     {
-        const int DeltaX = x - m_mouseX;
-        const int DeltaY = y - m_mouseY;
-
+        m_pendingDX += x - m_mouseX;
+        m_pendingDY += y - m_mouseY;
         m_mouseX = x;
         m_mouseY = y;
+    }
 
-        m_AngleH += (float)DeltaX / 20.0f;
-        m_AngleV += (float)DeltaY / 20.0f;
+    void ApplyMouseLook()
+    {
+        if(m_pendingDX == 0 && m_pendingDY == 0)    return;
 
-        // keep looking up/down within +-90 degrees
-        if (m_AngleV >  90.0f) m_AngleV =  90.0f;
-        if (m_AngleV < -90.0f) m_AngleV = -90.0f;
+        m_AngleH += (float)m_pendingDX / 20.0f;
+        m_AngleV += (float)m_pendingDY / 20.0f;
+        m_pendingDX = 0;
+        m_pendingDY = 0;
 
-        // at the window border the mouse can't move further, so keep turning
-        if (DeltaX == 0) {
-            if (x <= MARGIN) {
-                m_OnLeftEdge = true;
-            }
-            else if (x >= (m_windowWidth - MARGIN)) {
-                m_OnRightEdge = true;
-            }
-        }
-        else {
-            m_OnLeftEdge  = false;
-            m_OnRightEdge = false;
-        }
-
-        if (DeltaY == 0) {
-            if (y <= MARGIN) {
-                m_OnUpperEdge = true;
-            }
-            else if (y >= (m_windowHeight - MARGIN)) {
-                m_OnLowerEdge = true;
-            }
-        }
-        else {
-            m_OnUpperEdge = false;
-            m_OnLowerEdge = false;
-        }
+        if(m_AngleV > 90.0f)    m_AngleV = 90.0f;
+        if(m_AngleV < -90.0f)   m_AngleV = 90.0f;
 
         Update();
     }
 
-    void OnRender()
+    void WarpToCenter()
     {
-        bool ShouldUpdate = false;
-
-        if (m_OnLeftEdge) {
-            m_AngleH -= 0.1f;
-            ShouldUpdate = true;
-        }
-        else if (m_OnRightEdge) {
-            m_AngleH += 0.1f;
-            ShouldUpdate = true;
-        }
-
-        if (m_OnUpperEdge) {
-            if (m_AngleV > -90.0f) {
-                m_AngleV -= 0.1f;
-                ShouldUpdate = true;
-            }
-        }
-        else if (m_OnLowerEdge) {
-            if (m_AngleV < 90.0f) {
-                m_AngleV += 0.1f;
-                ShouldUpdate = true;
-            }
-        }
-
-        if (ShouldUpdate) {
-            Update();
-        }
+        m_mouseX = glutGet(GLUT_WINDOW_WIDTH) / 2;
+        m_mouseY = glutGet(GLUT_WINDOW_HEIGHT) / 2;
+        glutWarpPointer(m_mouseX, m_mouseY);
     }
 
     void SetTargetPosition(const Vector3f& pos)
     {
         m_targetPos = pos;
+    }
+
+    void UpdateMovement(float dt)
+    {
+        float forward = 0.0f, side = 0.0f;
+        if(m_keyUp)     forward += 1.0f;
+        if(m_keyDown)   forward -= 1.0f;
+        if(m_keyLeft)   side    -= 1.0f;
+        if(m_keyRight)  side    += 1.0f;
+
+        if(forward == 0.0f && side == 0.0f) return;
+
+        if(dt > 0.1f)   dt = 0.1f;
+
+        Vector3f Right = m_up.Cross(m_target);
+        Right.Normalize();
+
+        const float d = m_moveSpeed * dt;
+        m_pos.x += (m_target.x * forward + Right.x * side) * d;
+        m_pos.y += (m_target.y * forward + Right.y * side) * d;
+        m_pos.z += (m_target.z * forward + Right.z * side) * d;
+
+        m_targetPos = m_pos;
     }
 
     void UpdateSmoothMovement(float dt)
@@ -281,15 +254,22 @@ private:
     Vector3f m_targetPos;
     Vector3f m_up;
     float    m_stepSize;
+    float    m_moveSpeed = 15.0f;
 
     int   m_windowWidth;
     int   m_windowHeight;
     int   m_mouseX;
     int   m_mouseY;
+    int   m_pendingDX;
+    int   m_pendingDY;
     float m_AngleH;
     float m_AngleV;
     bool  m_OnUpperEdge;
     bool  m_OnLowerEdge;
     bool  m_OnLeftEdge;
     bool  m_OnRightEdge;
+    bool m_keyUp = false;
+    bool m_keyDown = false;
+    bool m_keyLeft = false;
+    bool m_keyRight = false;
 };

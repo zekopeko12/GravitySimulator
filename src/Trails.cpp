@@ -5,7 +5,6 @@
 #include <GL/glew.h>
 #include <vector>
 
-static vector<size_t> gTrailStart;
 
 static void InitTrails()
 {

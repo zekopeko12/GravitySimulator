@@ -14,18 +14,20 @@ void SpecialKeyboardCB(int Key, int x, int y)
     gFollowing = false;
     if (pGameCamera){
         pGameCamera->StopFollowing();
-        pGameCamera->OnKeyboard(Key);
+        pGameCamera->SetKey(Key, true);
     }
 }
 
 void KeyboardUpCB(unsigned char Key, int x, int y)
 {
     ImGui_ImplGLUT_KeyboardUpFunc(Key, x, y);
+    if(pGameCamera) pGameCamera->SetKey(Key, false);
 }
 
 void SpecialKeyboardUpCB(int Key, int x, int y)
 {
     ImGui_ImplGLUT_SpecialUpFunc(Key, x, y);
+    if(pGameCamera) pGameCamera->SetKey(Key, false);
 }
 
 void KeyboardCB(unsigned char Key, int x, int y)
@@ -37,7 +39,10 @@ void KeyboardCB(unsigned char Key, int x, int y)
         exit(0);
     }
     gFollowing = false;
-    if(pGameCamera) pGameCamera->StopFollowing();
+    if (pGameCamera){
+        pGameCamera->StopFollowing();
+        pGameCamera->SetKey(Key, true);
+    }
 }
 
 int PickBall(int x, int y)

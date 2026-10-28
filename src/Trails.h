@@ -4,6 +4,7 @@
 #include "Ball.h"
 #include "Camera.h"
 
+extern vector<size_t> gTrailStart;
 extern GLuint gTrailVAO;
 extern GLuint gTrailVBO;
 extern const size_t kMaxTrailPoints;

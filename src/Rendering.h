@@ -15,7 +15,9 @@ extern BallInstance gMoon;
 extern const float outlineColor[3];
 extern GLuint gShaderProgram;
 extern bool gMoonInitialized;
+extern float gCurrentFOV;
 
 void SetBallTransform(int i, float scale);
 void SetAsteroidTransform(int i, float scale, float width, float height);
+int GetLODTier(BallInstance planet);
 void RenderSceneCB();

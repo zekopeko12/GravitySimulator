@@ -9,6 +9,7 @@
 void RenderMenus(int height, int width, vector<BallInstance>& gBalls, int& gSelected, vector<BallInstance>& gAsteroids)
 {
     static bool showPlanetCreator = false;
+    static bool paused = false;
 
     ImGuiIO& io = ImGui::GetIO();
     io.DisplaySize = ImVec2((float)width, (float)height);
@@ -28,9 +29,17 @@ void RenderMenus(int height, int width, vector<BallInstance>& gBalls, int& gSele
         gBalls.clear();
         gAsteroids.clear();
         gTrails.clear();
+        gMoonInitialized = false;
     }
 
-    ImGui::SliderFloat("Time scale", &gTimeScale, 0.0f, 20.0f);
+    if(ImGui::Button("Pause/Unpause")){
+        paused = !paused;
+
+        if(paused)  gTimeScale = 0.0f;
+        else        gTimeScale = 1.0f;
+    }
+
+    ImGui::SliderFloat("Time scale", &gTimeScale, 0.1f, 20.0f);
 
     if(ImGui::Button("Solar system")){
         gSelected = -1;

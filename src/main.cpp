@@ -31,33 +31,34 @@ GLint gColorLocation;
 GLint gWVPLocation;
 
 static vector<vector<float> > gTrails;
+static vector<size_t> gTrailStart;
 static GLuint gTrailVAO = 0;
 static GLuint gTrailVBO = 0;
 
-Camera* pGameCamera = NULL;
-float gCurrentFOV = 30.0f;
-static bool gLookMode = false;
+Camera*     pGameCamera = NULL;
+float       gCurrentFOV = 30.0f;
+static bool gLookMode   = false;
 
-Ball gBall(32, 32, 1.0f);
+Ball gBall(16, 16, 1.0f);
 Ball gAsteroidBall(6, 6, 1.0f);
 vector<BallInstance> gBalls;
 vector<BallInstance> gAsteroids;
 static BallInstance gMoon;
 static bool gMoonInitialized = false;
 
-int gSelected = -1;
+int gSelected   = -1;
 bool gFollowing = false;
 float gLastFollowPos[3];
 
 const float GravitationalConstant = 2.56e-4f;
 float gTimeScale = 1.0f;
 
-static const float kBallScale = 0.6f;
-static const float kPlanetMassScale = 0.02f;
-static const float kSelectedBallScale = 0.75f;
-static const size_t kMaxTrailPoints = 1500;     // points kept per planet
-static const float  kTrailInterval  = 0.03f;   // seconds between recorded points
-static const float kTrailFraction = 0.35f;     // fraction of one orbit the trail covers
+static const float  kBallScale          = 0.6f;
+static const float  kPlanetMassScale    = 0.02f;
+static const float  kSelectedBallScale  = 0.75f;
+static const size_t kMaxTrailPoints     = 1500;     // points kept per planet
+static const float  kTrailInterval      = 0.03f;   // seconds between recorded points
+static const float  kTrailFraction      = 0.35f;     // fraction of one orbit the trail covers
 
 const float outlineColor[3] = { 0.0f, 1.0f, 1.0f };
 

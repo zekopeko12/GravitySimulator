@@ -1,12 +1,13 @@
 #include "Rendering.h"
 #include "CBFunctions.h"
+#include "GL/freeglut_std.h"
 #include "Pipeline.h"
 #include "Gravity.h"
 #include "Trails.h"
 #include "Ball.h"
 #include "UI.h"
 
-static void SetBallTransform(int i, float scale)
+void SetBallTransform(int i, float scale)
 {
     Pipeline p;
 
@@ -36,25 +37,62 @@ void SetAsteroidTransform(int i, float scale, float width, float height)
     glUniformMatrix4fv(gWVPLocation, 1, GL_TRUE, (const GLfloat*)p.GetTrans());
 }
 
+int GetLODTier(BallInstance planet)
+{
+    const Vector3f camPos = pGameCamera->GetPos();
+    const float h = (float)glutGet(GLUT_WINDOW_HEIGHT);
+    const float r = RadiusFromMass(planet.mass);
+
+    const float dx = planet.pos[0] - camPos[0];
+    const float dy = planet.pos[1] - camPos[1];
+    const float dz = planet.pos[2] - camPos[2];
+
+    const float d = sqrtf(dx * dx + dy * dy + dz * dz);
+    const float tanHalfFOV = tanf(ToRad(gCurrentFOV / 2.0f));
+
+    const float pixelRadius = r * h / (2 * d * tanHalfFOV);
+    int level = 0;
+
+    if(pixelRadius <= 20)    level = MAX_LOD;
+    else if(pixelRadius > 20 && pixelRadius <= 80) level = MAX_LOD - 1;
+    else    level = 0;
+
+    return level;
+}
+
 void RenderSceneCB()
 {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
     static int lastTime = glutGet(GLUT_ELAPSED_TIME);
     const int now = glutGet(GLUT_ELAPSED_TIME);
-    const float dt = (now - lastTime) / 1000.0f;
+    float frameTime = (now - lastTime) / 1000.0f;
     lastTime = now;
 
-    if(pGameCamera) pGameCamera->UpdateSmoothMovement(dt);
+    if(frameTime > 0.25f)   frameTime = 0.25f;
 
-    float simDt = dt;
-    if(simDt > 0.1f) simDt = 0.1f;
+    static float accumulator = 0.0f;
+    accumulator += frameTime;
 
-    simDt *= gTimeScale;
+    const float physicsStep = 0.0166f;  //apprx 60 hz
 
-    const int kMaxSubsteps = 40;
-    const float maxStep = (simDt / kMaxSubsteps > 0.02f) ? simDt / kMaxSubsteps : 0.02f;
-    StepGravity(simDt, maxStep);
+    if(pGameCamera){
+        if(gLookMode){
+            pGameCamera->ApplyMouseLook();
+            pGameCamera->WarpToCenter();
+        }
+        float camDt = (frameTime > 0.1f) ? 0.1f : frameTime;
+        pGameCamera->UpdateMovement(camDt);
+        pGameCamera->UpdateSmoothMovement(camDt);
+    }
+
+    while(accumulator >= physicsStep){
+        float simDt = physicsStep * gTimeScale;
+        const float maxStep = 0.02f;
+
+        StepGravity(simDt, maxStep);
+        accumulator -= physicsStep;
+    }
 
     int width = glutGet(GLUT_WINDOW_WIDTH);
     int height = glutGet(GLUT_WINDOW_HEIGHT);
@@ -77,8 +115,6 @@ void RenderSceneCB()
         lastFollowed = -1;
     }
 
-    pGameCamera->OnRender();
-
     glUseProgram(gShaderProgram);
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
@@ -90,8 +126,9 @@ void RenderSceneCB()
         if(i == gSelected || gBalls[i].dead)    continue;
 
         SetBallTransform(i, RadiusFromMass(gBalls[i].mass));
+        int LODlevel = GetLODTier(gBalls[i]);
         glUniform3f(gColorLocation, gBalls[i].color[0], gBalls[i].color[1], gBalls[i].color[2]);
-        gBall.DrawBall();
+        gBall.DrawBall(LODlevel);
     }
 
     if(!gAsteroids.empty()){
@@ -101,8 +138,10 @@ void RenderSceneCB()
         glUniform3f(gColorLocation, gAsteroids[0].color[0], gAsteroids[0].color[1], gAsteroids[0].color[2]);
 
         for(int i = 0; i < (int)gAsteroids.size(); i++){
+            int LODlevel = GetLODTier(gAsteroids[i]);
+
             SetAsteroidTransform(i, RadiusFromMass(gAsteroids[i].mass), fw, fh);
-            gBall.DrawBall();
+            gBall.DrawBall(LODlevel);
         }
     }
 
@@ -113,6 +152,8 @@ void RenderSceneCB()
         float height = (float)glutGet(GLUT_WINDOW_HEIGHT);
         if(height == 0.0f) height = 1.0f;
 
+        int LODlevel = GetLODTier(gMoon);
+
         float moonScale = RadiusFromMass(gMoon.mass);
         p.Scale(moonScale, moonScale, moonScale);
         p.WorldPos(gMoon.pos[0], gMoon.pos[1], gMoon.pos[2]);
@@ -122,12 +163,12 @@ void RenderSceneCB()
 
         glUniformMatrix4fv(gWVPLocation, 1, GL_TRUE, (const GLfloat*)p.GetTrans());
         glUniform3f(gColorLocation, gMoon.color[0], gMoon.color[1], gMoon.color[2]);
-        gBall.DrawBall();
-
+        gBall.DrawBall(LODlevel);
     }
 
     if(gSelected >= 0 && gSelected < (int)gBalls.size()){
         glEnable(GL_STENCIL_TEST);
+        int LODlevel = GetLODTier(gBalls[gSelected]);
 
         glStencilFunc(GL_ALWAYS, 1, 0xFF);
         glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
@@ -136,7 +177,7 @@ void RenderSceneCB()
 
         SetBallTransform(gSelected, RadiusFromMass(gBalls[gSelected].mass));
         glUniform3f(gColorLocation, gBalls[gSelected].color[0], gBalls[gSelected].color[1], gBalls[gSelected].color[2]);
-        gBall.DrawBall();
+        gBall.DrawBall(LODlevel);
 
         glStencilFunc(GL_NOTEQUAL, 1, 0xFF);
         glStencilMask(0x00);
@@ -144,12 +185,15 @@ void RenderSceneCB()
 
         SetBallTransform(gSelected, RadiusFromMass(gBalls[gSelected].mass) * 1.08f);
         glUniform3f(gColorLocation, outlineColor[0], outlineColor[1], outlineColor[2]);
-        gBall.DrawBall();
+        gBall.DrawBall(LODlevel);
 
         glEnable(GL_DEPTH_TEST);
         glDepthMask(GL_TRUE);
         glStencilMask(0xFF);
         glDisable(GL_STENCIL_TEST);
+
+        printf("LOD: %d\n", LODlevel);
+
     }
 
     RenderMenus(height, width, gBalls, gSelected, gAsteroids);
